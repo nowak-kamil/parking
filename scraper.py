@@ -8,8 +8,8 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright
 
 URL = 'https://ztp.krakow.pl/parkingi-pr/sprawdz-wolne-miejsca-pr'
-DB_PATH = 'db_parkingow.db'
-CSV_PATH = 'csv_parkingow.csv'
+DB_PATH = 'db_parking.db'
+CSV_PATH = 'csv_parking.csv'
 
 PARKING_NAMES = [
     'P+R Górka Narodowa', 'P+R Pachońskiego', 'P+R Krowodrza Górka',
