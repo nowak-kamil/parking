@@ -8,8 +8,8 @@ from datetime import datetime
 from playwright.sync_api import sync_playwright
 
 URL = 'https://ztp.krakow.pl/parkingi-pr/sprawdz-wolne-miejsca-pr'
-DB_PATH = 'archiwum_parkingow.db'
-CSV_PATH = 'archiwum_parkingow.csv'
+DB_PATH = 'db_parkingow.db'
+CSV_PATH = 'csv_parkingow.csv'
 
 PARKING_NAMES = [
     'P+R Górka Narodowa', 'P+R Pachońskiego', 'P+R Krowodrza Górka',
@@ -19,11 +19,11 @@ PARKING_NAMES = [
 def init_db():
     conn = sqlite3.connect(DB_PATH)
     conn.execute('''
-        CREATE TABLE IF NOT EXISTS historia (
+        CREATE TABLE IF NOT EXISTS history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             timestamp TEXT,
-            nazwa TEXT,
-            wolne INTEGER,
+            parking TEXT,
+            free INTEGER,
             exported INTEGER DEFAULT 0
         )
     ''')
@@ -32,11 +32,11 @@ def init_db():
 
 
 def export_to_csv(conn):
-    cursor = conn.execute('SELECT id, timestamp, nazwa, wolne FROM historia WHERE exported = 0 ORDER BY id')
+    cursor = conn.execute('SELECT id, timestamp, parking, free FROM history WHERE exported = 0 ORDER BY id')
     rows = cursor.fetchall()
 
     if not rows:
-        print('Brak nowych danych do dopisania do CSV.')
+        print('No data to save in CSV.')
         return
 
     file_exists = os.path.isfile(CSV_PATH)
@@ -44,23 +44,23 @@ def export_to_csv(conn):
         with open(CSV_PATH, 'a', newline='', encoding='utf-8-sig') as f:
             writer = csv.writer(f, delimiter=';')
             if not file_exists:
-                writer.writerow(['Data i Godzina', 'Parking', 'Wolne miejsca'])
+                writer.writerow(['Date and Time', 'Parking name', 'Free parking space'])
 
             data_to_save = [row[1:] for row in rows]
             writer.writerows(data_to_save)
 
             ids = [row[0] for row in rows]
             placeholders = ",".join(["?"] * len(ids))
-            conn.execute(f'UPDATE historia SET exported = 1 WHERE id IN ({placeholders})', ids)
+            conn.execute(f'UPDATE history SET exported = 1 WHERE id IN ({placeholders})', ids)
             conn.commit()
-            print(f'Dopisano {len(rows)} nowych wierszy do {CSV_PATH}')
+            print(f'Add {len(rows)} new rows to {CSV_PATH}')
     except Exception as e:
-        print(f'Błąd podczas zapisu do CSV: {e}')
+        print(f'Error while saving to CSV: {e}')
 
 
 def run_monitor():
     db_conn = init_db()
-    print('=== MONITOR PARKINGÓW P+R KRAKÓW ===')
+    print('PARKINGÓW P+R KRAKÓW MONITOR ')
 
     with sync_playwright() as p:
         try:
@@ -70,7 +70,7 @@ def run_monitor():
                     page = context.new_page()
 
                     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    print(f'[{ts}] Pobieranie danych...')
+                    print(f'[{ts}] Data download...')
 
                     page.goto(URL, wait_until='networkidle', timeout=60000)
                     html_content = page.content()
@@ -83,7 +83,7 @@ def run_monitor():
                         if match:
                             wolne = int(match.group(1))
                             db_conn.execute(
-                                'INSERT INTO historia (timestamp, nazwa, wolne) VALUES (?, ?, ?)',
+                                'INSERT INTO history (timestamp, parking, free ) VALUES (?, ?, ?)',
                                 (ts, name, wolne)
                             )
                             found_count += 1
@@ -92,19 +92,19 @@ def run_monitor():
                         db_conn.commit()
                         export_to_csv(db_conn)
                     else:
-                        print('Błąd: Nie znaleziono danych na stronie.')
+                        print('Error: No data on site')
 
                 except Exception as err:
-                    print(f'Błąd w trakcie sesji: {err}')
+                    print(f'Error: {err}')
 
                 finally:
                     browser.close()
-                    print('Przeglądarka zamknięta, zasoby zwolnione.')
+                    print('Browser closed')
 
-                print('Oczekiwanie')
+                print('Waiting')
 
         except KeyboardInterrupt:
-            print('\nZatrzymywanie skryptu...')
+            print('\nClosing...')
         finally:
             if db_conn:
                 export_to_csv(db_conn)
